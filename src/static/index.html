@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agente SIEG</title>
+<style>
+  :root {
+    --cor-fundo: #0f1115;
+    --cor-painel: #171a21;
+    --cor-borda: #262b36;
+    --cor-texto: #e6e8eb;
+    --cor-texto-suave: #9aa3b2;
+    --cor-acento: #4f8cff;
+    --cor-bolha-usuario: #24314f;
+    --cor-bolha-agente: #1c1f28;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--cor-fundo);
+    color: var(--cor-texto);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--cor-borda);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+  header span {
+    font-size: 12px;
+    color: var(--cor-texto-suave);
+  }
+  #conversa {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 780px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .mensagem {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    line-height: 1.45;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .usuario {
+    align-self: flex-end;
+    background: var(--cor-bolha-usuario);
+    border-bottom-right-radius: 3px;
+  }
+  .agente {
+    align-self: flex-start;
+    background: var(--cor-bolha-agente);
+    border: 1px solid var(--cor-borda);
+    border-bottom-left-radius: 3px;
+  }
+  .erro {
+    align-self: flex-start;
+    background: #3a1f22;
+    border: 1px solid #5c2a2e;
+    color: #ffb4ba;
+  }
+  .arquivos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .arquivos a {
+    color: var(--cor-acento);
+    text-decoration: none;
+    font-size: 13px;
+    border: 1px solid var(--cor-borda);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #12151b;
+  }
+  .arquivos a:hover { text-decoration: underline; }
+  #status {
+    align-self: flex-start;
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+    padding: 0 14px;
+  }
+  form {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--cor-borda);
+    max-width: 780px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    background: var(--cor-painel);
+    border: 1px solid var(--cor-borda);
+    color: var(--cor-texto);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    height: 44px;
+  }
+  textarea:focus { outline: 1px solid var(--cor-acento); }
+  button {
+    background: var(--cor-acento);
+    border: none;
+    color: white;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Agente SIEG</h1>
+    <span>certificados · documentos fiscais · DANFE/DACTE/DANFSE · relatórios</span>
+  </header>
+  <div id="conversa"></div>
+  <form id="form-chat">
+    <textarea id="campo-mensagem" placeholder="Pergunte em português, ex.: liste meus certificados ativos" autofocus></textarea>
+    <button type="submit" id="botao-enviar">Enviar</button>
+  </form>
+
+<script>
+  // Front-end vanilla de propósito, sem build nem dependências externas
+  // (o objetivo aqui é validar o agente ponta a ponta, não construir uma
+  // SPA). sessao_id fica em localStorage só como conveniência de UX (pra
+  // manter a mesma conversa entre recarregamentos de página) — o estado
+  // de verdade da conversa vive no processo Flask (ver ressalva em app.py).
+  const conversaEl = document.getElementById("conversa");
+  const formEl = document.getElementById("form-chat");
+  const campoEl = document.getElementById("campo-mensagem");
+  const botaoEl = document.getElementById("botao-enviar");
+
+  let sessaoId = null;
+  try { sessaoId = localStorage.getItem("sieg_agente_sessao_id"); } catch (e) { /* modo privado etc. */ }
+
+  function adicionarMensagem(texto, classe, arquivos) {
+    const bolha = document.createElement("div");
+    bolha.className = "mensagem " + classe;
+    bolha.textContent = texto;
+    if (arquivos && arquivos.length) {
+      const wrap = document.createElement("div");
+      wrap.className = "arquivos";
+      arquivos.forEach(function (a) {
+        const link = document.createElement("a");
+        link.href = a.url;
+        link.textContent = "⬇ " + a.nome;
+        link.target = "_blank";
+        wrap.appendChild(link);
+      });
+      bolha.appendChild(wrap);
+    }
+    conversaEl.appendChild(bolha);
+    conversaEl.scrollTop = conversaEl.scrollHeight;
+    return bolha;
+  }
+
+  formEl.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const mensagem = campoEl.value.trim();
+    if (!mensagem) return;
+
+    adicionarMensagem(mensagem, "usuario");
+    campoEl.value = "";
+    botaoEl.disabled = true;
+    const statusEl = adicionarMensagem("pensando...", "agente");
+    statusEl.id = "status";
+
+    try {
+      const resp = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mensagem: mensagem, sessao_id: sessaoId }),
+      });
+      const dados = await resp.json();
+      statusEl.remove();
+
+      if (!resp.ok) {
+        adicionarMensagem(dados.erro || "Erro desconhecido.", "erro");
+        return;
+      }
+
+      sessaoId = dados.sessao_id;
+      try { localStorage.setItem("sieg_agente_sessao_id", sessaoId); } catch (e) {}
+
+      adicionarMensagem(dados.resposta || "(sem resposta)", "agente", dados.arquivos);
+    } catch (erro) {
+      statusEl.remove();
+      adicionarMensagem("Falha ao falar com o servidor: " + erro, "erro");
+    } finally {
+      botaoEl.disabled = false;
+      campoEl.focus();
+    }
+  });
+
+  campoEl.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      formEl.requestSubmit();
+    }
+  });
+</script>
+</body>
+</html>

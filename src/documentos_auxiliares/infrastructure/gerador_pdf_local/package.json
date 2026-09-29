@@ -1,0 +1,9 @@
+{
+  "name": "gerador-pdf-local-nfce",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Gera DANFCE (NFC-e) localmente via Node.js, chamado como subprocesso pelo NodeGeradorPdfLocalAdapter (Python). Não é um pacote publicável.",
+  "dependencies": {
+    "linkedom": "^0.18.13"
+  }
+}
